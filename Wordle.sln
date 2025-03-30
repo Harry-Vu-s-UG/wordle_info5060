@@ -1,0 +1,37 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.13.35913.81 d17.13
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WordServer", "WordServer\WordServer.csproj", "{F5DC3254-0486-49DC-8B67-CFED772EF41F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WordleGameServer", "WordleGameServer\WordleGameServer.csproj", "{A4653010-C44C-4DB4-BCCC-66ACBC514AA3}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WordleGameClient", "WordleGameClient\WordleGameClient.csproj", "{E767075B-DF97-4258-883B-04EF1F99A125}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{F5DC3254-0486-49DC-8B67-CFED772EF41F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F5DC3254-0486-49DC-8B67-CFED772EF41F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F5DC3254-0486-49DC-8B67-CFED772EF41F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F5DC3254-0486-49DC-8B67-CFED772EF41F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A4653010-C44C-4DB4-BCCC-66ACBC514AA3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A4653010-C44C-4DB4-BCCC-66ACBC514AA3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A4653010-C44C-4DB4-BCCC-66ACBC514AA3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A4653010-C44C-4DB4-BCCC-66ACBC514AA3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E767075B-DF97-4258-883B-04EF1F99A125}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E767075B-DF97-4258-883B-04EF1F99A125}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E767075B-DF97-4258-883B-04EF1F99A125}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E767075B-DF97-4258-883B-04EF1F99A125}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {6B63C030-1966-41D4-8FBA-09483CDE3E01}
+	EndGlobalSection
+EndGlobal

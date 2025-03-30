@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+option csharp_namespace = "WordleGameServer.Protos";
+
+service  DailyWordle{
+	rpc Play(stream WordGuessRequest) returns (stream GuessResultResponse);
+	rpc GetStats(StatsRequest) returns (StatsResponse);
+}
+
+message WordGuessRequest {
+	string guess = 1;
+}
+
+message StatsRequest {
+}
+
+enum LetterMatch {
+	CORRECT = 0;
+	WRONG_POS = 1;
+	INCORRECT = 2;
+}
+
+message Letter {
+	string character = 1;
+	LetterMatch match = 2;
+}
+
+message GuessResultResponse {
+	bool guessCorrect = 1;
+	bool gameOver = 2;
+	bool guessValid = 3;
+	repeated Letter word = 4;
+	repeated string included = 5;
+	repeated string available = 6;
+	repeated string exluded = 7;
+}
+
+message StatsResponse {
+	string dailyWord = 1;
+	int32 players = 2;
+	int32 winPercentage = 3;
+	float guessAverage = 4;
+}
