@@ -1,11 +1,23 @@
-﻿using Grpc.Net.Client;
+﻿// WordleGameClient 
+// Anh Duc Vu, Jacob Wall, Jeong-Ah Yoon  
+// March 14, 2025  
+// Connects to the Wordle game server using gRPC.  
+// Handles user input and displays feedback in the console.  
+// Plays one game per session and shows daily stats.
+
+using Grpc.Net.Client;
 using Grpc.Core;
 using WordleGameServer.Protos;
 
 namespace WordleGameClient
 {
-    internal class Program
+    public class Program
     {
+        /// <summary>
+        /// Runs the main game loop for the Wordle client.
+        /// Connects to the server, sends guesses, and displays results.
+        /// Shows daily stats and prompts to play again.
+        /// </summary>
         static async Task Main(string[] args)
         {
             // initiate connection with server
@@ -96,7 +108,7 @@ namespace WordleGameClient
                 Console.WriteLine($"Today's Word:\t\t{statsResponse.DailyWord}");
                 Console.WriteLine($"Players:\t\t{statsResponse.Players}");
                 Console.WriteLine($"Winners:\t\t{statsResponse.WinPercentage}%");
-                Console.WriteLine($"Average Guesses:\t{statsResponse.GuessAverage}\n");
+                Console.WriteLine($"Average Guesses:\t{statsResponse.GuessAverage:F1}\n");
 
 
                 // prompt user to play again as a new player
@@ -125,6 +137,10 @@ namespace WordleGameClient
             }
 
         }
+
+        /// <summary>
+        /// Prints the game title and instructions to the console.
+        /// </summary>
         static void PrintTitle()
         {
             Console.WriteLine("+------------------+");
@@ -138,6 +154,10 @@ namespace WordleGameClient
             Console.WriteLine("? - means the letter should be in another spot.");
             Console.WriteLine("* - means the letter is correct in this spot.\n");
         }
+
+        /// <summary>
+        /// Prompts the user to enter word guess for the current turn.
+        /// </summary>
         static string GetGuess(int iteration)
         {
             bool valid = false;
