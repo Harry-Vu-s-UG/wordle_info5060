@@ -101,7 +101,6 @@ namespace WordleGameServer.Services
 
         private string GetWordForDate(DateTime date)
         {
-            // For the current day, we can use the client directly
             if (date.Date == DateTime.Today)
             {
                 return WordServerClient.GetWord();
@@ -118,7 +117,6 @@ namespace WordleGameServer.Services
                 }
                 catch
                 {
-                    // If there's an error reading the file, fall back to current word
                     return WordServerClient.GetWord();
                 }
             }
@@ -132,11 +130,10 @@ namespace WordleGameServer.Services
             DateTime gameStartDate = DateTime.Today;
             string gameStartDateKey = gameStartDate.ToString("yyyyMMdd");
             
-            // Store the player's game date using peer ID as key
+            // Peer id as key
             string clientId = context.Peer;
             _playerGameDates[clientId] = gameStartDate;
 
-            // Ensure stats are loaded for this date
             LoadStatsForDate(gameStartDate);
 
             // Game variables
@@ -262,7 +259,6 @@ namespace WordleGameServer.Services
             
             string dateKey = targetDate.ToString("yyyyMMdd");
 
-            // Ensure stats are loaded for the target date
             LoadStatsForDate(targetDate);
 
             // Create response object
