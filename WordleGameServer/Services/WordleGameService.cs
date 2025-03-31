@@ -7,41 +7,143 @@ namespace WordleGameServer.Services
 {
     public class WordleGameService : DailyWordle.DailyWordleBase
     {
-        private static DateTime? _date;
+        private static DateTime? _currentGameDate;
 
-        //Harry: Should we handle this in the file? in case server dies and restart
-        private static uint numPlayers = 0;
-        private static uint playersWon = 0;
-        private static int[] guessDistribution = new int[6];
-
-
-        private const string _StatsFile = "daily_stats.json";
+        // Stats for the current day
+        private static Dictionary<string, Stats> _dailyStats = new Dictionary<string, Stats>();
         private static Mutex mutex = new Mutex();
+        private static bool _statsLoaded = false;
+        // Track player sessions by client ID
+        private static Dictionary<string, DateTime> _playerGameDates = new Dictionary<string, DateTime>();
+
+        // Constructor to load stats on startup
+        public WordleGameService()
+        {
+            // Load stats from disk only once when service starts
+            if (!_statsLoaded)
+            {
+                LoadTodayStats();
+                _statsLoaded = true;
+            }
+        }
+
+        private string GetStatsFileName(DateTime date)
+        {
+            return $"stats_{date.ToString("yyyyMMdd")}.json";
+        }
+
+        private void LoadTodayStats()
+        {
+            DateTime today = DateTime.Today;
+            LoadStatsForDate(today);
+            _currentGameDate = today;
+        }
+
+        private void LoadStatsForDate(DateTime date)
+        {
+            string statsFileName = GetStatsFileName(date);
+            string dateKey = date.ToString("yyyyMMdd");
+
+            mutex.WaitOne();
+            try
+            {
+                if (!_dailyStats.ContainsKey(dateKey))
+                {
+                    if (File.Exists(statsFileName))
+                    {
+                        string json = File.ReadAllText(statsFileName);
+                        Stats stats = JsonConvert.DeserializeObject<Stats>(json)!;
+
+                        // Verify that the loaded stats are for the expected word
+                        string expectedWord = GetWordForDate(date);
+                        if (stats.Word == expectedWord)
+                        {
+                            _dailyStats[dateKey] = stats;
+                            Console.WriteLine($"Loaded existing stats for {dateKey} from disk");
+                        }
+                        else
+                        {
+                            // Word doesn't match, create fresh stats
+                            _dailyStats[dateKey] = CreateNewStats(expectedWord);
+                            Console.WriteLine($"Word mismatch for {dateKey}, created fresh stats");
+                        }
+                    }
+                    else
+                    {
+                        // No stats file exists yet
+                        string wordForDate = GetWordForDate(date);
+                        _dailyStats[dateKey] = CreateNewStats(wordForDate);
+                        Console.WriteLine($"No stats file found for {dateKey}, created fresh stats");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error loading stats for {dateKey}: {ex.Message}");
+                _dailyStats[dateKey] = CreateNewStats(GetWordForDate(date));
+            }
+            finally
+            {
+                mutex.ReleaseMutex();
+            }
+        }
+
+        private Stats CreateNewStats(string word)
+        {
+            return new Stats
+            {
+                Word = word,
+                Players = 0,
+                PlayersCorrect = 0,
+                GuessDistribution = new int[6]
+            };
+        }
+
+        private string GetWordForDate(DateTime date)
+        {
+            // For the current day, we can use the client directly
+            if (date.Date == DateTime.Today)
+            {
+                return WordServerClient.GetWord();
+            }
+
+            string statsFileName = GetStatsFileName(date);
+            if (File.Exists(statsFileName))
+            {
+                try
+                {
+                    string json = File.ReadAllText(statsFileName);
+                    Stats stats = JsonConvert.DeserializeObject<Stats>(json)!;
+                    return stats.Word;
+                }
+                catch
+                {
+                    // If there's an error reading the file, fall back to current word
+                    return WordServerClient.GetWord();
+                }
+            }
+
+            return WordServerClient.GetWord();
+        }
 
         public override async Task Play(IAsyncStreamReader<WordGuessRequest> requestStream, IServerStreamWriter<GuessResultResponse> responseStream, ServerCallContext context)
         {
-            _date ??= DateTime.Now;
-            if (_date.Value.Day != DateTime.Now.Day)
-            {
-                _date = DateTime.Now;
-                numPlayers = 0;
-                playersWon = 0;
-                guessDistribution = new int[6];
-            }
-            /*
-             if we keep this logic then to be safer to compare even in the different months?
-            if (_date?.Date != DateTime.Today)
-                {
-                    _date = DateTime.Now;
-                    numPlayers = 0;
-                    playersWon = 0;
-                    guessDistribution = new int[6];
-                }
-             */
+            // Store the date when the game starts
+            DateTime gameStartDate = DateTime.Today;
+            string gameStartDateKey = gameStartDate.ToString("yyyyMMdd");
+            
+            // Store the player's game date using peer ID as key
+            string clientId = context.Peer;
+            _playerGameDates[clientId] = gameStartDate;
 
+            // Ensure stats are loaded for this date
+            LoadStatsForDate(gameStartDate);
+
+            // Game variables
             uint turnsUsed = 0;
             bool gameWon = false;
             LetterMatch[] results = new LetterMatch[5];
+            Array.Fill(results, LetterMatch.Incorrect);
 
             SortedSet<string> included = new SortedSet<string>();
             SortedSet<string> available = new SortedSet<string>
@@ -53,14 +155,13 @@ namespace WordleGameServer.Services
 
             try
             {
-                string wordToGuess = WordServerClient.GetWord();
+                string wordToGuess = GetWordForDate(gameStartDate);
 
                 while (!gameWon && turnsUsed < 6 && await requestStream.MoveNext() && !context.CancellationToken.IsCancellationRequested)
                 {
                     string wordPlayed = requestStream.Current.Guess;
 
                     GuessResultResponse response = new();
-                    var error = WordServerClient.ValidateWord(wordPlayed);
                     if (!WordServerClient.ValidateWord(wordPlayed))
                     {
                         response.GuessValid = false;
@@ -82,11 +183,11 @@ namespace WordleGameServer.Services
                         gameWon = true;
                         response.GuessCorrect = true;
                         response.GameOver = true;
-                        playersWon++;
-                        guessDistribution[turnsUsed - 1]++;
+
                         for (int i = 0; i < results.Length; i++)
                         {
                             results[i] = LetterMatch.Correct;
+                            response.Word.Add(new Letter { Character = wordPlayed[i].ToString(), Match = LetterMatch.Correct });
                         }
                     }
                     else
@@ -96,40 +197,48 @@ namespace WordleGameServer.Services
 
                     if (response.GameOver)
                     {
-                          WriteStats(wordToGuess);
-                        //WriteStats(wordToGuess, response, turnsUsed);
-
+                        WriteStats(gameStartDateKey, wordToGuess, response, turnsUsed);
                     }
                     await responseStream.WriteAsync(response);
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                Console.WriteLine("Error: serverside error");
+                Console.WriteLine($"Error: serverside error - {ex.Message}");
             }
-            finally 
-            { 
-                
-            }
-
         }
 
-        private void WriteStats(string dailyWord)
+        private void WriteStats(string dateKey, string wordToGuess, GuessResultResponse response, uint turnsUsed)
         {
-
-            // lock the file with mutex
             mutex.WaitOne();
             try
             {
-                Stats gameStats = new Stats();
-                gameStats.Word = dailyWord;
-                gameStats.Players = (int)(++numPlayers);
-                gameStats.PlayersCorrect = (int)playersWon;
-                gameStats.GuessDistribution = guessDistribution;
+                // Make sure stats for this date are loaded
+                if (!_dailyStats.ContainsKey(dateKey))
+                {
+                    DateTime date = DateTime.ParseExact(dateKey, "yyyyMMdd", null);
+                    LoadStatsForDate(date);
+                }
 
-                string json = JsonConvert.SerializeObject(gameStats, Formatting.Indented);
+                Stats stats = _dailyStats[dateKey];
+                stats.Players++;
 
-                File.WriteAllText(_StatsFile, json);
+                if (response.GuessCorrect)
+                {
+                    stats.PlayersCorrect++;
+                    stats.GuessDistribution[turnsUsed - 1]++;
+                }
+
+                stats.Word = wordToGuess;
+
+                // Write the updated stats to disk
+                string statsFileName = $"stats_{dateKey}.json";
+                string json = JsonConvert.SerializeObject(stats, Formatting.Indented);
+                File.WriteAllText(statsFileName, json);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error writing stats: {ex.Message}");
             }
             finally
             {
@@ -137,77 +246,62 @@ namespace WordleGameServer.Services
             }
         }
 
-
-        // suggestion about static variable part -- int[] guessDistribution has to be moved to Play() and setup the variable which stores the right number to add
-        private void WriteStats(string wordToguess ,GuessResultResponse response,uint turnsUsed)
-        {
-            mutex.WaitOne();
-            try
-            {
-                string dateString = DateTime.Now.ToString("yyyyMMdd");
-                Stats stats;
-                if (!File.Exists($"{dateString}.json"))
-                {
-                    stats = new Stats();
-                }
-                else
-                {
-                    var json = File.ReadAllText($"{dateString}.json");
-                    stats = JsonConvert.DeserializeObject<Stats>(json)?? new Stats();
-                    
-                }
-                stats.Players++;
-                if (response.GuessCorrect)
-                {
-                    stats.PlayersCorrect++;
-                    stats.GuessDistribution[turnsUsed - 1]++;
-                }
-                stats.Word = wordToguess;
-                string jsonString = JsonConvert.SerializeObject(stats);
-                File.WriteAllText($"{dateString}.json", jsonString);
-           
-            }
-            catch (Exception)
-            {
-
-            }
-            
-            finally
-            { 
-                mutex?.ReleaseMutex();
-            }
-        }
-
-
         public override Task<StatsResponse> GetStats(StatsRequest request, ServerCallContext context)
         {
-            // create response object
+            // Get the client ID
+            string clientId = context.Peer;
+            
+            // Default to today's stats if we can't find the player's game date
+            DateTime targetDate = DateTime.Today;
+            
+            // Check if this player has a recorded game date
+            if (_playerGameDates.ContainsKey(clientId))
+            {
+                targetDate = _playerGameDates[clientId];
+            }
+            
+            string dateKey = targetDate.ToString("yyyyMMdd");
+
+            // Ensure stats are loaded for the target date
+            LoadStatsForDate(targetDate);
+
+            // Create response object
             StatsResponse response = new StatsResponse();
 
-            // lock the file with mutex
             mutex.WaitOne();
             try
             {
-                if (File.Exists(_StatsFile))
+                if (_dailyStats.ContainsKey(dateKey))
                 {
-                    string json = File.ReadAllText(_StatsFile);
-
-                    Stats stats = JsonConvert.DeserializeObject<Stats>(json)!;
+                    Stats stats = _dailyStats[dateKey];
                     response.DailyWord = stats.Word;
                     response.Players = stats.Players;
-                    response.WinPercentage = (int)(((double)stats.PlayersCorrect / stats.Players) * 100);
+                    response.WinPercentage = stats.Players > 0
+                        ? (int)(((double)stats.PlayersCorrect / stats.Players) * 100)
+                        : 0;
+
                     int totalGuesses = 0;
                     for (int i = 0; i < stats.GuessDistribution.Length; i++)
                     {
                         totalGuesses += stats.GuessDistribution[i] * (i + 1);
                     }
-                    response.GuessAverage = stats.PlayersCorrect > 0 ? (float)((double)totalGuesses / stats.PlayersCorrect) : 0;
-
+                    response.GuessAverage = stats.PlayersCorrect > 0
+                        ? (float)((double)totalGuesses / stats.PlayersCorrect)
+                        : 0;
                 }
                 else
                 {
-                    throw new FileNotFoundException($"File {_StatsFile} not found!");
+                    throw new FileNotFoundException($"Stats for {dateKey} not found!");
                 }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error getting stats: {ex.Message}");
+                // Return empty response with default values
+                response.DailyWord = GetWordForDate(targetDate);
+                response.Players = 0;
+                response.WinPercentage = 0;
+                response.GuessAverage = 0;
             }
             finally
             {
@@ -216,48 +310,6 @@ namespace WordleGameServer.Services
 
             return Task.FromResult(response);
         }
-
-        //Harry!!!!!!!!!!!!: if we decide to change the static variable 
-
-        //public override Task<StatsResponse> GetStats(StatsRequest request, ServerCallContext context)
-        //{
-
-        //    StatsResponse response = new StatsResponse();
-
-        //    string dateString = DateTime.Now.ToString("yyyyMMdd");
-        //    string filename = $"{dateString}.json";
-
-        //    mutex.WaitOne();
-        //    try
-        //    {
-        //        if (File.Exists(filename))
-        //        {
-        //            string json = File.ReadAllText(filename);
-
-        //            Stats stats = JsonConvert.DeserializeObject<Stats>(json)!;
-        //            response.DailyWord = stats.Word;
-        //            response.Players = stats.Players;
-        //            response.WinPercentage = (int)(((double)stats.PlayersCorrect / stats.Players) * 100);
-        //            int totalGuesses = 0;
-        //            for (int i = 0; i < stats.GuessDistribution.Length; i++)
-        //            {
-        //                totalGuesses += stats.GuessDistribution[i] * (i + 1);
-        //            }
-        //            response.GuessAverage = stats.PlayersCorrect > 0 ? (float)((double)totalGuesses / stats.PlayersCorrect) : 0;
-
-        //        }
-        //        else
-        //        {
-        //            throw new FileNotFoundException($"File {filename} not found!");
-        //        }
-        //    }
-        //    finally
-        //    {
-        //        mutex?.ReleaseMutex();
-        //    }
-
-        //    return Task.FromResult(response);
-        //}
 
         private GuessResultResponse ValidWordResponse(GuessResultResponse res, string wordPlayed, LetterMatch[] results, SortedSet<string> included, SortedSet<string> available, SortedSet<string> excluded, string wordToGuess)
         {
@@ -305,7 +357,7 @@ namespace WordleGameServer.Services
                             }
                         }
                     }
-              
+
                 // set each match result for each letter in response
                 for (int i = 0; i < results.Length; i++)
                 {
@@ -321,9 +373,6 @@ namespace WordleGameServer.Services
 
             return response;
         }
-
-                
-        }
-
     }
+}
 

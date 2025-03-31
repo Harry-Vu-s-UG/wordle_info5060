@@ -8,21 +8,6 @@ namespace WordleGameServer.Clients
     {
         private static DailyWord.DailyWordClient? _wordServer = null;
 
-        /*
-        public static string GetWord()
-        {
-            ConnectToService();
-
-            if (_wordServer == null)
-            {
-                throw new Exception("Error: Something wrong in server. No Service Sorry");
-            }
-
-            WordResponse response = _wordServer.GetWord(new WordRequest());
-
-            return response.Word;
-        }
-        */
 
         public static string GetWord()
         {
@@ -32,24 +17,7 @@ namespace WordleGameServer.Clients
 
             return response?.Word ?? "";
         }
-        /*
 
-
-        public static bool ValidateWord(string word)
-        {
-            ConnectToService();
-
-            if (_wordServer == null)
-            {
-                throw new Exception("Error: Something wrong in server. No Service Sorry");
-            }
-
-            MatchResponse reply = _wordServer.ValidateWord(new MatchRequest { ClientWord = word });
-
-            return reply.Valid;
-        }
-
-        */
         public static bool ValidateWord(string word)
         {
             ConnectToService();

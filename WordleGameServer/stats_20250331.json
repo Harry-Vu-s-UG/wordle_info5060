@@ -1,13 +1,13 @@
 {
-  "Word": "croak",
+  "Word": "given",
   "Players": 1,
   "PlayersCorrect": 1,
   "GuessDistribution": [
     0,
     0,
-    0,
-    0,
     1,
+    0,
+    0,
     0
   ]
 }
