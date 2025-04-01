@@ -1,4 +1,13 @@
-﻿using Grpc.Core;
+﻿// WordServer.Services
+// Anh Duc Vu, Jacob Wall,Jeong-Ah Yoon
+// March 14, 2025
+// This service provides two main features related to the Wordle game (2 rpcs are implemented):
+// - GetWord: Returns the word of the day, determined based on the current date.
+// - ValidateWord: Checks if the submitted word exists in the official Wordle word list.
+// The word list is loaded once from "wordle.json" and stores it as a static member variable.
+// The selected word is consistent each day and avoids repeating the previous day's word (seed used).
+
+using Grpc.Core;
 using System.Text.Json;
 using WordServer.Protos;
 
@@ -11,6 +20,10 @@ namespace WordServer.Services
         private const string wordleFile = "wordle.json";
         private static DateTime _currentDate = DateTime.Today;
 
+        /// <summary>
+        /// Returns match results for each letter in the guessed word.
+        /// Also updates included, excluded, and available letter sets.
+        /// </summary>
         public override Task<WordResponse> GetWord(WordRequest request, ServerCallContext context)
         {
             var response = new WordResponse();
@@ -42,6 +55,9 @@ namespace WordServer.Services
             //return Task.FromResult(new WordResponse { Word = "croak" }); // for test
         }
 
+        /// <summary>
+        /// Picks an index based on the given date, making sure it’s not the same as yesterday’s.
+        /// </summary>
         private int GetDeterministicIndex(DateTime date)
         {
             // Create a deterministic seed based on the date
@@ -69,6 +85,9 @@ namespace WordServer.Services
             return todayIndex;
         }
 
+        /// <summary>
+        /// Checks if the given word exists in the Wordle list.
+        /// </summary>
         public override Task<MatchResponse> ValidateWord(MatchRequest request, ServerCallContext context)
         {
             var response = new MatchResponse();
@@ -96,6 +115,9 @@ namespace WordServer.Services
             return Task.FromResult(response);
         }
 
+        /// <summary>
+        /// Loads the word list from "wordle.json" and store it for use as a static variable.
+        /// </summary>
         public void ParseWordleFile()
         {
             if (File.Exists(wordleFile))

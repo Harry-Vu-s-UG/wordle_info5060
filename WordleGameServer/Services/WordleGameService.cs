@@ -1,4 +1,10 @@
-﻿using Grpc.Core;
+﻿// WordleGameService.cs  
+// Anh Duc Vu, Jacob Wall, Jeong-Ah Yoon  
+// March 31, 2025  
+// Handles Wordle gameplay and daily stats using gRPC streaming.
+// Validates guesses, sends results, and saves stats to disk.
+
+using Grpc.Core;
 using Newtonsoft.Json;
 using WordleGameServer.Clients;
 using WordleGameServer.Protos;
@@ -17,6 +23,10 @@ namespace WordleGameServer.Services
         private static Dictionary<string, DateTime> _playerGameDates = new Dictionary<string, DateTime>();
 
         // Constructor to load stats on startup
+        
+        /// <summary>
+        /// Constructor that ensures today's game stats are loaded once when the service starts.
+        /// </summary>
         public WordleGameService()
         {
             // Load stats from disk only once when service starts
@@ -27,11 +37,17 @@ namespace WordleGameServer.Services
             }
         }
 
+        /// <summary>
+        /// Returns the stats filename for the given date.
+        /// </summary>
         private string GetStatsFileName(DateTime date)
         {
             return $"stats_{date.ToString("yyyyMMdd")}.json";
         }
 
+        /// <summary>
+        /// Loads stats for today's date and sets the current game date.
+        /// </summary>
         private void LoadTodayStats()
         {
             DateTime today = DateTime.Today;
@@ -39,6 +55,10 @@ namespace WordleGameServer.Services
             _currentGameDate = today;
         }
 
+        /// <summary>
+        /// Loads stats for the given date from disk, or creates new stats if needed.
+        /// Ensures the word matches the one expected for that date.
+        /// </summary>
         private void LoadStatsForDate(DateTime date)
         {
             string statsFileName = GetStatsFileName(date);
@@ -88,6 +108,9 @@ namespace WordleGameServer.Services
             }
         }
 
+        /// <summary>
+        /// Creates a new Stats object with default values for a given word.
+        /// </summary>
         private Stats CreateNewStats(string word)
         {
             return new Stats
@@ -99,6 +122,9 @@ namespace WordleGameServer.Services
             };
         }
 
+        /// <summary>
+        /// Returns the word for the given date, using saved stats if available.
+        /// </summary>
         private string GetWordForDate(DateTime date)
         {
             if (date.Date == DateTime.Today)
@@ -124,6 +150,10 @@ namespace WordleGameServer.Services
             return WordServerClient.GetWord();
         }
 
+        /// <summary>
+        /// Handles the main Wordle gameplay using bidirectional streaming.
+        /// Validates guesses, updates stats, and sends feedback to the client.
+        /// </summary>
         public override async Task Play(IAsyncStreamReader<WordGuessRequest> requestStream, IServerStreamWriter<GuessResultResponse> responseStream, ServerCallContext context)
         {
             // Store the date when the game starts
@@ -205,6 +235,9 @@ namespace WordleGameServer.Services
             }
         }
 
+        /// <summary>
+        /// Updates the daily stats and saves them to disk after each completed game.
+        /// </summary>
         private void WriteStats(string dateKey, string wordToGuess, GuessResultResponse response, uint turnsUsed)
         {
             mutex.WaitOne();
@@ -243,6 +276,9 @@ namespace WordleGameServer.Services
             }
         }
 
+        /// <summary>
+        /// Returns game stats for the current or previously recorded date for the client.
+        /// </summary>
         public override Task<StatsResponse> GetStats(StatsRequest request, ServerCallContext context)
         {
             // Get the client ID
@@ -307,7 +343,13 @@ namespace WordleGameServer.Services
             return Task.FromResult(response);
         }
 
-        private GuessResultResponse ValidWordResponse(GuessResultResponse res, string wordPlayed, LetterMatch[] results, SortedSet<string> included, SortedSet<string> available, SortedSet<string> excluded, string wordToGuess)
+        /// <summary>
+        /// Compares the guessed word to the correct word and returns match results per letter.
+        /// Write the code from the given suedo code
+        /// Populates included, excluded, and available letters for feedback.
+        /// </summary>
+        private GuessResultResponse ValidWordResponse(GuessResultResponse res, string wordPlayed, LetterMatch[] results, 
+            SortedSet<string> included, SortedSet<string> available, SortedSet<string> excluded, string wordToGuess)
         {
             GuessResultResponse response = res;
 

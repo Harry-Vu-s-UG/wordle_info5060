@@ -1,12 +1,12 @@
 {
   "Word": "given",
-  "Players": 1,
-  "PlayersCorrect": 1,
+  "Players": 13,
+  "PlayersCorrect": 11,
   "GuessDistribution": [
-    0,
-    0,
+    7,
+    2,
     1,
-    0,
+    1,
     0,
     0
   ]
