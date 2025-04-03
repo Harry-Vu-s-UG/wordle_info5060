@@ -32,8 +32,8 @@ namespace WordleGameServer.Services
             // Load stats from disk only once when service starts
             if (!_statsLoaded)
             {
-                LoadTodayStats();
-                _statsLoaded = true;
+                    LoadTodayStats();
+                    _statsLoaded = true;
             }
         }
 

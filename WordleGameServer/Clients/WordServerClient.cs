@@ -3,6 +3,7 @@
 // March 14, 2025   
 // Connects to the WordServer gRPC service to fetch and validate words.
 
+using Grpc.Core;
 using Grpc.Net.Client;
 using WordServer.Protos;
 
@@ -17,9 +18,16 @@ namespace WordleGameServer.Clients
         /// </summary>
         public static string GetWord()
         {
-            ConnectToService();
-
-            WordResponse? response = _wordServer?.GetWord(new WordRequest());
+            WordResponse? response = new WordResponse();
+            try
+            {
+                ConnectToService();
+                response = _wordServer?.GetWord(new WordRequest());
+            }
+            catch (RpcException)
+            {
+                throw new RpcException(new Status(StatusCode.Unavailable, "Word server not running or is unavailable"));
+            }
 
             return response?.Word ?? "";
         }
@@ -29,9 +37,17 @@ namespace WordleGameServer.Clients
         /// </summary>
         public static bool ValidateWord(string word)
         {
+            MatchResponse? reply = new MatchResponse();
+            try
+            {
+                reply = _wordServer?.ValidateWord(new MatchRequest { ClientWord = word });
+            }
+            catch (RpcException)
+            {
+                throw new RpcException(new Status(StatusCode.Unavailable, "Word server not running or is unavailable"));
+            }
             ConnectToService();
 
-            MatchResponse? reply = _wordServer?.ValidateWord(new MatchRequest { ClientWord = word });
 
             return reply!.Valid;
         }
