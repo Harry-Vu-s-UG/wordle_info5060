@@ -8,6 +8,7 @@
 using Grpc.Net.Client;
 using Grpc.Core;
 using WordleGameServer.Protos;
+using System.Threading.Channels;
 
 namespace WordleGameClient
 {
@@ -25,14 +26,33 @@ namespace WordleGameClient
             var game = new DailyWordle.DailyWordleClient(channel);
 
             bool newGame = true;
+
             while (newGame)
             {
-
-                PrintTitle();
 
                 // game start from server
                 using (var call = game.Play())
                 {
+                    // check if the worldle server is up
+                    CheckConnection(channel);
+
+                    // attempt to get stats just to check if the wordle game server
+                    // has access to the word server (is the word server online?)
+                    try
+                    {
+                        game.GetStats(new StatsRequest());
+                    }
+                    catch (RpcException ex)
+                    {
+                        Console.Clear();
+                        Console.Write("Error: " + ex.Status.Detail);
+                        Environment.Exit(1);
+                    }
+
+                    // print the wordled title
+                    Console.Clear();
+                    PrintTitle();
+
                     bool gameOver = false;
 
                     int guessIteration = 1;
@@ -44,11 +64,24 @@ namespace WordleGameClient
                         // get user guess and populate request
                         request.Guess = GetGuess(guessIteration);
 
-                        // send request to server
-                        await call.RequestStream.WriteAsync(request);
+                        try
+                        {
+                            // send request to server
+                            await call.RequestStream.WriteAsync(request);
 
-                        // get response from server
-                        await call.ResponseStream.MoveNext();
+                            // get response from server
+                            await call.ResponseStream.MoveNext();
+                        }
+                        catch (RpcException e)
+                        {
+                            Console.WriteLine(e.Message);
+                            Environment.Exit(1);
+                        }
+                        catch (Exception e)
+                        {
+                            Console.WriteLine($"Server Error: {e.Message}");
+                            Environment.Exit(1);
+                        }
                         GuessResultResponse response = call.ResponseStream.Current;
 
                         // if the response is not valid, stop and send another request
@@ -101,8 +134,23 @@ namespace WordleGameClient
                     }
                     while (!gameOver);
                 }
-                // print daily statistics from server
-                StatsResponse statsResponse = game.GetStats(new StatsRequest());
+                StatsResponse statsResponse = new StatsResponse();
+                try
+                {
+                    // print daily statistics from server
+                    statsResponse = game.GetStats(new StatsRequest());
+                }
+                catch (RpcException e)
+                {
+                    Console.WriteLine(e.Message);
+                    Environment.Exit(1);
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine($"Server Error: {e.Message}");
+                    Environment.Exit(1);
+                }
+
                 Console.WriteLine("\nStatistics");
                 Console.WriteLine("----------\n");
                 Console.WriteLine($"Today's Word:\t\t{statsResponse.DailyWord}");
@@ -113,29 +161,74 @@ namespace WordleGameClient
 
                 // prompt user to play again as a new player
                 Console.Write("Play game as new user? [Y/N]: ");
-                bool validInput = false;
-                char input;
-                while (!validInput)
-                {
-                    input = Console.ReadKey().KeyChar;
-                    Console.WriteLine();
-                    switch (Char.ToLower(input))
-                    {
-                        case 'y':
-                            newGame = true;
-                            validInput = true;
-                            break;
-                        case 'n':
-                            newGame = false;
-                            validInput = true;
-                            break;
-                        default:
-                            Console.WriteLine("Unknown input, try again.");
-                            continue;
-                    }
-                }
+                newGame = GetYesNoDecision();
             }
 
+        }
+
+        /// <summary>
+        /// Checks the connection between the client and the wordle game server
+        /// </summary>
+        /// <param name="channel">the Grpc channel for the game server</param>
+        static void CheckConnection(GrpcChannel channel)
+        {
+            // check if the client has successfully connected to the server
+            int connectAttempt = 0;
+            string connectText = "Connecting to wordle server";
+            Console.Write(connectText);
+            while (channel.State != ConnectivityState.Ready)
+            {
+
+
+                if (++connectAttempt > 5)
+                {
+                    Console.Clear();
+                    Console.Write("Unable to connect to wordle server.");
+                    Environment.Exit(0);
+                }
+                else
+                {
+                    // simple animated loading
+                    for (int i = 0; i < 3; i++)
+                    {
+                        Thread.Sleep(500);
+                        Console.Write(".");
+                    }
+                    Thread.Sleep(500);
+                    // moves the cursor to the three dots
+                    Console.SetCursorPosition(connectText.Length, Console.CursorTop);
+                    // removes the 3 dots
+                    Console.Write("   ");
+                    Console.SetCursorPosition(connectText.Length, Console.CursorTop);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Used to get and validate a yes or no decision from the user
+        /// </summary>
+        /// <returns>true if yes, false if no</returns>
+        static bool GetYesNoDecision()
+        {
+            bool validInput = false;
+            char input;
+            while (!validInput)
+            {
+                input = Console.ReadKey().KeyChar;
+                Console.WriteLine();
+                switch (Char.ToLower(input))
+                {
+                    case 'y':
+                        return true;
+                    case 'n':
+                        return false;
+                    default:
+                        Console.WriteLine("Unknown input, try again.");
+                        validInput = false;
+                        continue;
+                }
+            }
+            return false;
         }
 
         /// <summary>
